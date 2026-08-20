@@ -17,15 +17,16 @@ import {
   Mail,
   MapPin,
   Menu,
-  Moon,
   Radio,
   Send,
   Server,
+  Settings2,
   Sparkles,
   Sun,
   Terminal,
   X,
 } from 'lucide-react'
+import { presetValues, useTheme, type Appearance, type Preset } from '@/components/theme-provider'
 
 const projects = [
   {
@@ -95,21 +96,38 @@ function SoftButton({ children, onClick, variant = 'primary', type = 'button' }:
   return <button type={type} onClick={onClick} className={`soft-button ${variant}`}>{children}</button>
 }
 
+function ThemeCustomizer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { appearance, preset, customAccent, setAppearance, setPreset, setCustomAccent, resetTheme } = useTheme()
+  const [customOpen, setCustomOpen] = useState(Boolean(customAccent))
+  const presets: { id: Preset; label: string }[] = [
+    { id: 'ocean', label: 'Ocean' },
+    { id: 'sage', label: 'Sage' },
+    { id: 'coral', label: 'Coral' },
+    { id: 'violet', label: 'Violet' },
+    { id: 'graphite', label: 'Graphite' },
+  ]
+  if (!open) return null
+  return <div className="theme-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><motion.aside className="theme-panel" role="dialog" aria-modal="true" aria-labelledby="theme-title" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 18 }}><div className="theme-panel-head"><div><div className="eyebrow">Appearance</div><h3 id="theme-title">Make it yours.</h3></div><button className="icon-button" onClick={onClose} aria-label="Close appearance settings"><X size={17} /></button></div><p className="theme-copy">Tune the workspace without changing the work.</p><div className="theme-control"><span className="theme-label">Mode</span><div className="segmented-control" role="group" aria-label="Color mode">{(['light', 'dark', 'system'] as Appearance[]).map((option) => <button key={option} className={appearance === option ? 'selected' : ''} onClick={() => setAppearance(option)}>{option}</button>)}</div></div><div className="theme-control"><span className="theme-label">Accent</span><div className="preset-grid">{presets.map((option) => <button key={option.id} className={`preset ${preset === option.id && !customAccent ? 'selected' : ''}`} onClick={() => { setPreset(option.id); setCustomOpen(false) }} aria-label={`${option.label} accent`}><span style={{ background: presetValues[option.id] }} /><small>{option.label}</small></button>)}<button className={`preset ${customAccent ? 'selected' : ''}`} onClick={() => setCustomOpen(true)} aria-label="Custom accent"><span className="custom-swatch" style={{ background: customAccent ?? 'conic-gradient(from 90deg, #4f7ee8, #dc8069, #5d9b82, #866ee5, #4f7ee8)' }} /><small>Custom</small></button></div></div>{customOpen && <div className="custom-accent"><label htmlFor="accent-picker">Custom color<input id="accent-picker" type="color" value={customAccent ?? presetValues[preset]} onChange={(event) => setCustomAccent(event.target.value)} /></label><input aria-label="Accent intensity" type="range" min="0" max="100" defaultValue="72" /></div>}<div className="theme-preview"><span className="preview-dot" /><div><b>Live preview</b><small>Soft surfaces, focused color</small></div><span className="preview-button">Aa</span></div><button className="reset-theme" onClick={resetTheme}>Reset to system default</button></motion.aside></div>
+}
+
 export default function Page() {
   const [active, setActive] = useState('home')
-  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const { appearance, resolvedAppearance } = useTheme()
   const [selectedProject, setSelectedProject] = useState<(typeof projects)[number] | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [themeOpen, setThemeOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const reduceMotion = useReducedMotion()
 
   useEffect(() => {
-    const saved = window.localStorage.getItem('gaurav-theme') as 'light' | 'dark' | null
-    const preferred = saved ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-    setTheme(preferred)
-    document.documentElement.classList.toggle('dark', preferred === 'dark')
     const timer = window.setTimeout(() => setLoading(false), 650)
     return () => window.clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setThemeOpen(false); setSelectedProject(null); setMenuOpen(false) } }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
   }, [])
 
   useEffect(() => {
@@ -121,13 +139,6 @@ export default function Page() {
     return () => observer.disconnect()
   }, [])
 
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light'
-    setTheme(next)
-    document.documentElement.classList.toggle('dark', next === 'dark')
-    window.localStorage.setItem('gaurav-theme', next)
-  }
-
   if (loading) return <div className="loading-screen"><div className="loading-mark">GK</div><p>Preparing the workspace<span className="loading-dots">...</span></p></div>
 
   return (
@@ -136,7 +147,7 @@ export default function Page() {
         <button className="brand" onClick={() => scrollToSection('home')} aria-label="Go to home"><span>GK</span><strong>Gaurav Khetwal</strong></button>
         <div className="topbar-actions">
           <span className="availability"><i /> Available for thoughtful builds</span>
-          <button className="icon-button" onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
+          <button className="icon-button" onClick={() => setThemeOpen(true)} aria-label="Open appearance settings"><Settings2 size={17} /></button>
           <button className="icon-button menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu"><Menu size={18} /></button>
         </div>
       </header>
@@ -159,6 +170,8 @@ export default function Page() {
       </div>
 
       <nav className="dock" aria-label="Primary navigation">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={active === item.id ? 'active' : ''} onClick={() => scrollToSection(item.id)} aria-label={`Go to ${item.label}`} aria-current={active === item.id ? 'page' : undefined}><Icon size={18} /><span>{item.label}</span>{active === item.id && <motion.i layoutId="active-dot" />}</button> })}</nav>
+
+      <AnimatePresence><ThemeCustomizer open={themeOpen} onClose={() => setThemeOpen(false)} /></AnimatePresence>
 
       <AnimatePresence>{selectedProject && <motion.div className="modal-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedProject(null)}><motion.div className="project-modal" role="dialog" aria-modal="true" aria-labelledby="project-title" initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 24, scale: 0.97 }} onClick={(event) => event.stopPropagation()}><button className="modal-close icon-button" onClick={() => setSelectedProject(null)} aria-label="Close project details"><X size={18} /></button><div className={`modal-art ${selectedProject.accent}`}><span>{selectedProject.eyebrow}</span><div className="modal-art-shape"><Code2 size={42} /></div></div><div className="modal-content"><div className="eyebrow">{selectedProject.role}</div><h2 id="project-title">{selectedProject.title}</h2><p>{selectedProject.description}</p><div className="case-grid"><div><small>Challenge</small><p>{selectedProject.challenge}</p></div><div><small>Solution</small><p>{selectedProject.solution}</p></div><div><small>Outcome</small><p>{selectedProject.outcome}</p></div></div><div className="modal-actions"><a className="soft-button soft" href={selectedProject.live}>Live demo <ArrowUpRight size={15} /></a><a className="soft-button soft" href={selectedProject.source}>Source code <GitBranch size={15} /></a></div></div></motion.div></motion.div>}</AnimatePresence>
     </main>
